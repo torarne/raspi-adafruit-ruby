@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
 # coding: UTF-8
-
 # lib/led/matrix8x8.rb
 #
 # Adafruit's 8x8 LED matrix (http://adafruit.com/products/959)
@@ -11,6 +10,9 @@
 # last update: 2013.06.28
 # 
 # by meinside@gmail.com
+#
+# tor@gisvold.co.uk - upate 31-aug-2013 for larger than 8*8 matrix
+
 
 # need 'i2c' gem installed
 require "i2c/i2c"
@@ -34,10 +36,12 @@ module Adafruit
       HT16K33_BLINKRATE_1HZ                 = 0x02
       HT16K33_BLINKRATE_HALFHZ              = 0x03
 
-      MAX_COL = 8
-      MAX_ROW = 8
+      MAX_COL = 24
+      MAX_ROW = 16
+      DATA_ADDRESSES = [0x70,0x71,0x72] # one row of 8*16 led's per data_address.
 
-      def initialize(device = RaspberryPi::i2c_device_path, address = 0x70, options = {blink_rate: HT16K33_BLINKRATE_OFF, brightness: 15})
+      def initialize(device = RaspberryPi::i2c_device_path, options = {blink_rate: HT16K33_BLINKRATE_OFF, brightness: 15})
+      @data_addresses = DATA_ADDRESSES
         if device.kind_of? String
           @device = ::I2C.create(device)
         else
@@ -47,14 +51,16 @@ module Adafruit
           end
           @device = device
         end
-        @address = address
+        @data_addresses.each do |address| # Initialise each of the 8*16 LED stacks
+        	@address = address
 
-        # turn on oscillator
-        @device.write(@address, HT16K33_REGISTER_SYSTEM_SETUP | 0x01, 0x00)
+			# turn on oscillator
+			@device.write(@address, HT16K33_REGISTER_SYSTEM_SETUP | 0x01, 0x00)
 
-        # set blink rate and brightness
-        set_blink_rate(options[:blink_rate])
-        set_brightness(options[:brightness])
+			# set blink rate and brightness
+			set_blink_rate(options[:blink_rate])
+			set_brightness(options[:brightness])
+        end
 
         if block_given?
           yield self
@@ -63,12 +69,17 @@ module Adafruit
 
       def set_blink_rate(rate)
         rate = HT16K33_BLINKRATE_OFF if rate > HT16K33_BLINKRATE_HALFHZ
-        @device.write(@address, HT16K33_REGISTER_DISPLAY_SETUP | 0x01 | (rate << 1), 0x00)
+        @data_addresses.each do |address|
+        	@address = address
+        	@device.write(@address, HT16K33_REGISTER_DISPLAY_SETUP | 0x01 | (rate << 1), 0x00)
+        end
       end
 
       def set_brightness(brightness)
         brightness = 15 if brightness > 15
-        @device.write(@address, HT16K33_REGISTER_DIMMING | brightness, 0x00)
+        @data_addresses.each do |address|
+        	@device.write(@address, HT16K33_REGISTER_DIMMING | brightness, 0x00)
+        end
       end
 
       def clear
@@ -80,9 +91,39 @@ module Adafruit
       end
 
       def write(row, value)
-        value = (value << MAX_COL - 1) | (value >> 1)
-        @device.write(@address, row * 2, value & 0xFF)
-        @device.write(@address, row * 2 + 1, value >> MAX_COL)
+      #
+      # Needed a bit of a rewrite to find out which port to write to dependent on the row we write to
+      #
+      # It's COL that moves to next horisontal display
+      
+      columns = MAX_COL / 8 # The number of 8 pixel displays horisontally
+      if columns > 1 # If we have more than 1 display horisontally we need to write these to separate addresses
+      	value1 = value & 0xFF
+      	value2 = (value/256) & 0xFF
+      end
+      if columns > 2 
+      	value3 = (value/256/256) & 0xFF      
+      end
+      	register_number = row / 8
+      	row_new = row.modulo(8)
+#      	@address = @data_addresses[register_number]
+      	@address = @data_addresses[0]
+      	@address1 = @data_addresses[1]
+      	@address2 = @data_addresses[2]
+        value = (value << 7) | (value) # last part was wrongly (value << 1)
+        value1 = (value1 << 7) | (value1) # last part was wrongly (value << 1)
+        value2 = (value2 << 7) | (value2) # last part was wrongly (value << 1)
+        if row < 8
+        	@device.write(@address, row * 2, value1 & 0xFF) #First display really 
+        	@device.write(@address1, row * 2, value2 & 0xFF) #First display really 
+        	@device.write(@address1, row * 2, value3 & 0xFF) #First display really 
+        else
+        	@device.write(@address, (row - 8) * 2 + 1, value & 0xFF) # Second display
+        	@device.write(@address1, (row - 8) * 2 + 1, value2 & 0xFF) # Second display
+        	@device.write(@address1, (row - 8) * 2 + 1, value3 & 0xFF) # Second display
+        end
+#        @device.write(@address, row * 2 + 1, value >> MAX_COL) # Second display
+#        @device.write(@address, row, value & 0xFF) #First display really 
       end
 
       def write_array(arr)
