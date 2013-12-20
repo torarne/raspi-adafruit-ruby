@@ -1,9 +1,11 @@
-## Ruby code snippets for Raspberry Pi peripherals from Adafruit ##
-by Sungjin Han <meinside@gmail.com>
+## Ruby code snippets for Raspberry Pi LED matrix 24*16 board ##
+based on work by by Sungjin Han <meinside@gmail.com> and AdaFruit
+
+continued by Tor Gisvold (tor <at> gisvold.co.uk)
 
 ### Description ###
 
-Ruby scripts for various Raspberry Pi peripherals from Adafruit
+
 
 ### Instructions ###
 
@@ -34,7 +36,7 @@ blacklist i2c-bcm2708
 
 ### License ###
 
-Copyright (c) 2012, Sungjin Han <meinside@gmail.com>
+Copyright (c) 2013, Sungjin Han <meinside@gmail.com>
 All rights reserved.
   
  Redistribution and use in source and binary forms, with or without
